@@ -5,7 +5,7 @@
 void update_theta()
 {
     //detach the rotary encoder polling
-    timer1.detach();
+    //timer1.detach();
 
     //measurement data
     float y = get_acc_data(); //degree
@@ -63,5 +63,7 @@ void update_theta()
     mat_add(APAT[0], BUBT[0], P_theta_predict[0], 2, 2);//APA^T+BUB^T
 
     //attach a timer for the rotary encoder (40 kHz)
-    timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
+    
+    //timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
+    
 }

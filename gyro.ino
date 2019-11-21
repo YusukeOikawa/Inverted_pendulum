@@ -2,9 +2,9 @@ float get_gyro_data()
 {
   imu.readGyro();
 
-  int y_data = imu.g.y;
+  //int y_data = imu.g.y;
 
-  return float(x_data) / 131; //degree/sec
+  return float(imu.g.y) / 131; //degree/sec
 }
 
 void gyro_init()
@@ -13,8 +13,8 @@ void gyro_init()
     float theta_dot_array[sample_num];
     for(int i=0;i<sample_num;i++)
     {
-        theta_dot_array[i] = get_gyro_data();
-        wait(meas_interval);
+      theta_dot_array[i] = get_gyro_data();
+      delay(meas_interval);
     }
 
     //calculate mean　平均

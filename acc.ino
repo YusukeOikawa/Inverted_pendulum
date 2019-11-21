@@ -2,22 +2,21 @@ float get_acc_data()
 {
   imu.readAcc();
 
-  int x_data = imu.a.x;
-  int z_data = imu.a.z;
+  //int x_data = imu.a.x;
+  //int z_data = imu.a.z;
+  //float theta_deg = atan2(z_data, x_data); //radian
 
-  float theta_deg = atan2(z_data, x_data); //radian
-
-  return theta_deg * RAD_TO_DEG; //degree
+  return atan2(imu.a.z, imu.a.x) * RAD_TO_DEG; //thea_deg[degree]
 }
 
 void acc_init()
 {
-  //get data
+    //get data
     float theta_array[sample_num];
     for(int i=0; i<sample_num; i++)
     {
         theta_array[i] = get_acc_data();
-        wait( meas_interval );
+        delay( meas_interval );
     }
 
     //calculate mean

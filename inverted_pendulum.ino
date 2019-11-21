@@ -1,9 +1,28 @@
-
+//=========================================================
+//arduiono nano
+//LSM6
+//MAX14870 Single Brushed DC Motor Driver Carrier
+//=========================================================
 #include <Wire.h>
 #include <LSM6.h>
+#include <MsTimer2.h>
+
+//#define DEBUG_FLG
+
+//=========================================================
+//IMU
+LSM6 imu;//raw data
 
 //=========================================================
 //Port Setting
+#define ENCA PD2 //エンコーダA相(blue) pin 2
+#define ENCB PD3 //エンコーダB相(purple) pin3 
+#define IN_R PB4 //右モータドライバのDIRに接続 pin 12
+#define IN_PWM PB3 //モータドライバのPWMに接続　 (OC2A) pin 11
+#define IN_L PB2 //モータドライバのDIRに接続 pin 10
+#define led_r PB1 //Red LED pin 9
+#define led_g PB0 //Green LED pin 8
+#define led_y PD7 //Yellow LED pin7
 /*
 DigitalOut led1(LED1);  //LED on the NUCLEO board
 I2C i2c(PB_9, PB_8);    // Gyro + ACC (SDA, SCLK)
@@ -22,19 +41,21 @@ DigitalOut led_y(PC_2); //Yellow LED
 Ticker timer1; //for rotary encoder
 Ticker timer2; //for Kalman filter (angle)
 */
+//=========================================================
+#define max_voltage 10.0 //モータの最大出力電圧
 
 //=========================================================
 //Accelerometer and gyro statistical data
-int sample_num = 100;
-float meas_interval = 0.01;
-float theta_mean;
-float theta_variance;
-float theta_dot_mean;
-float theta_dot_variance;
+#define sample_num 100
+#define meas_interval 10.0
+float theta_mean; //平均
+float theta_variance; //角度分散
+float theta_dot_mean; //角速度平均
+float theta_dot_variance; //角速度分散
 
 //=========================================================
 //Rotary encoder variables
-int rotary_encoder_update_rate = 25; //usec
+//int rotary_encoder_update_rate = 25; //usec //タイマー割り込みでなく外部割り込みを使う
 int rotary_encoder_resolution = 100;
 int encoder_value = 0;
 int table[16] = {0, 1, -1, 0,  -1, 0, 0, 1,  1, 0, 0, -1,  0, -1, 1, 0};
@@ -89,6 +110,7 @@ float C_x[4][4] = {
 {0, 0, 1, 0},
 {0, 0, 0, 1}
 };
+
 //measurement noise
 float measure_variance_mat[4][4];
 //System noise
@@ -108,62 +130,85 @@ float motor_offset = 0.17; //volt
 //(R=1000, Q = diag(1, 1, 10, 10), f=100Hz)
 float Gain[4] = {29.87522919, 4.59857246, 0.09293, 0.37006248};
 
+//=========================================================
+
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
+  //Serial.println("Initialising...");
+
+  //-------------------------------------------
+  //LED
+  //-------------------------------------------
+  led_init();
+  PORTD |= _BV(led_y); //turns on the yellow LED
+  //Serial.println("LED initialization done");
+
   Wire.begin();
 
+
+  //imu設定
   if (!imu.init())
   {
-    Serial.println("Failed to detect and initialize IMU!");
+    //Serial.println("Failed to detect and initialize IMU!");
     while (1);
   }
   imu.enableDefault();
-  
+
+  //Serial.println("imu initialization done");
+
+  //-------------------------------------------
+  //Rotary encoder initialization
+  //-------------------------------------------
+  encoder_value = 0;
+  DDRD |= _BV(ENCA);
+  DDRD |= _BV(ENCB);
+  PORTD |= _BV(ENCA); //内部プルアップを有効にする
+  PORTD |= _BV(ENCB);
+  attachInterrupt(0, enc_changedPinA, CHANGE);
+  attachInterrupt(1, enc_changedPinB, CHANGE);
+
+  //Serial.println("Rotary encoder initialization done");
+
+  //-------------------------------------------
+  //Motor driver intialization
+  //モータ出力と Fast PWM 設定
+  //-------------------------------------------
+  DDRB |= _BV(IN_R);
+  DDRB |= _BV(IN_PWM);
+  DDRB |= _BV(IN_L);
+  TCCR2A  = bit(COM2A1);  // OC2A None-inverted Mode (1 0)
+  TCCR2A |= bit(COM2B1); // OC2B None-Inverted Mode  (1 0)
+  TCCR2A |= bit(WGM21)  | bit(WGM20);  // Fast PWM (0xFF)
+  TCCR2B = bit(CS21) | bit(CS20); // clock/32
+  OCR2A = 0; //pin 11 (PWM)
+  PORTB &= ~_BV(IN_R);
+  PORTB &= ~_BV(IN_L);
+
+  //Serial.println("Motor driver initialization done");
+
+
+  #ifdef DEBUG_FLG
+  #else
+
+  //-------------------------------------------
+  //Accelerometer & Gyro initialization
+  //-------------------------------------------
+  //Serial.println("Accelerometer & Gyro Initializing...");
+  acc_init();
+  gyro_init();
+  //Serial.println("Accelerometer & Gyro Initialization done");
+  #endif
 }
 
 void loop() {
-  main();
-}
-
-//=========================================================
-// Main
-//=========================================================
-int main() {
-
-    //-------------------------------------------
-    //LED
-    //-------------------------------------------
-    led1 = 0;
-    led_r = 0;
-    led_g = 0;
-    led_y = 0;
-    wait(1);   //wait 1 sec
-    led_y = 1; //turns on the yellow LED
-
-    //-------------------------------------------
-    //I2C initialization
-    //-------------------------------------------
-    i2c.frequency(400000); //400 kHz
-
-    //-------------------------------------------
-    //Accelerometer & Gyro initialization
-    //-------------------------------------------
-    acc_init();
-    gyro_init();
-
-    //-------------------------------------------
-    //Rotary encoder initialization
-    //-------------------------------------------
-    encoder_value = 0;
-
-    //-------------------------------------------
-    //Motor driver intialization
-    //-------------------------------------------
-    IN1 = 0; //motor stop
-    IN2 = 0; //motor stop
-    motor.period_us(100);   //10 kHz pulse
-    motor.pulsewidth_us(0); //0 to 100
+  #ifdef DEBUG_FLG
+    //Serial.println("DEBUG");
+    led_test();
+  #else
+    //=========================================================
+    // Main
+    //=========================================================
 
     //-------------------------------------------
     //Kalman filter (angle) initialization
@@ -246,7 +291,7 @@ int main() {
             measure_variance_mat[i][j] = 0;
         }
     }
-    float deg_rad_coeff = (3.14*3.14)/(180*180);
+    float deg_rad_coeff = DEG_TO_RAD * DEG_TO_RAD; //(3.14*3.14)/(180*180);
     measure_variance_mat[0][0] = theta_variance * deg_rad_coeff;
     measure_variance_mat[1][1] = theta_dot_variance * deg_rad_coeff;
     float encoder_error = 0.1f*2*3.14f/(4*rotary_encoder_resolution);
@@ -258,14 +303,16 @@ int main() {
     //Timer
     //-------------------------------------------
     //timer1: rotary encoder polling, 40 kHz
-    timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
+    //timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
     //timer2: Kalman filter (theta & theta_dot), 400 Hz
-    timer2.attach(&update_theta, theta_update_interval);
+    //timer2.attach(&update_theta, theta_update_interval);
 
     //-------------------------------------------
     //initialization done
     //-------------------------------------------
-    led_y = 0;
+    //Serial.println("Initialization done");
+    PORTD &= ~_BV(led_y);
+    
 
     //===========================================
     //Main loop
@@ -274,20 +321,19 @@ int main() {
     while(1)
     {
         //stop theta update process
-        timer2.detach();
+        //timer2.detach();
 
         //turn off LEDs
-        led1 = !led1;
-        led_g = 0;
-        led_r = 0;
+        PORTB &= ~_BV(led_g);
+        PORTB &= ~_BV(led_r);
 
         //---------------------------------------
         //Kalman Filter (all system)
         //---------------------------------------
         //measurement data
-        y[0][0] = theta_data[0][0] * 3.14f/180;
+        y[0][0] = theta_data[0][0] * DEG_TO_RAD;
         theta1_dot_temp = get_gyro_data();
-        y[1][0] = ( theta1_dot_temp - theta_data[1][0]) * 3.14f/180;
+        y[1][0] = ( theta1_dot_temp - theta_data[1][0]) * DEG_TO_RAD;
         y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution);
         y[3][0] = (y[2][0] - pre_theta2)/feedback_rate;
 
@@ -312,13 +358,13 @@ int main() {
 
         //predict the next step data: x'=Ax+Bu
         Vin = motor_value;
-        if(motor_value > 3.3f)
+        if(motor_value > max_voltage)
         {
-            Vin = 3.3f;
+            Vin = max_voltage;
         }
-        if(motor_value < -3.3f)
+        if(motor_value < -max_voltage)
         {
-            Vin = -3.3f;
+            Vin = -max_voltage;
         }
         mat_mul(A_x[0], x_data[0], A_x_x[0], 4, 4, 4, 1);//Ax_hat
         mat_mul_const(B_x[0], Vin , B_x_Vin[0], 4, 1);//Bu
@@ -356,64 +402,19 @@ int main() {
         }
 
         //calculate PWM pulse width
-        pwm_width = int( motor_value*100.0f/3.3f );
+        pwm_width = int( motor_value*100.0f/max_voltage );
 
-        //drive the motor in forward
-        if(pwm_width>=0)
-        {
-            //over voltage
-            if(pwm_width>100)
-            {
-                pwm_width = 100;
-            }
-            //to protect TA7291P
-            if(motor_direction == 2)
-            {
-                IN1 = 0;
-                IN2 = 0;
-                wait(0.0001); //wait 100 usec
-            }
-            //forward
-            IN1 = 1;
-            IN2 = 0;
-            led_g = 1;
-            motor.pulsewidth_us(pwm_width);
-            motor_direction = 1;
-        }
-        //drive the motor in reverse
-        else
-        {
-            //calculate the absolute value
-            pwm_width = -1 * pwm_width;
-
-            //over voltage
-            if(pwm_width>100)
-            {
-                pwm_width = 100;
-            }
-            //to protect TA7291P
-            if(motor_direction == 1)
-            {
-                IN1 = 0;
-                IN2 = 0;
-                wait(0.0001); //wait 100 usec
-            }
-            //reverse
-            IN1 = 0;
-            IN2 = 1;
-            led_r = 1;
-            motor.pulsewidth_us(pwm_width);
-            motor_direction = 2;
-        }
+        drive_motor(pwm_width);
 
         // prepare for the next calculation of theta2_dot
         pre_theta2 = y[2][0];
         // start the angle update process
-        timer2.attach(&update_theta, theta_update_interval);
+        //timer2.attach(&update_theta, theta_update_interval);
         // wait
-        wait(feedback_rate);
+        delay(feedback_rate);
     }
     //===========================================
     //Main loop (end)
     //===========================================
+  #endif
 }
