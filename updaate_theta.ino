@@ -6,6 +6,7 @@ void update_theta()
 {
     //detach the rotary encoder polling
     //timer1.detach();
+    noInterrupts(); //割り込み禁止
 
     //measurement data
     float y = get_acc_data(); //degree
@@ -65,5 +66,5 @@ void update_theta()
     //attach a timer for the rotary encoder (40 kHz)
     
     //timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
-    
+    interrupts(); //割り込み許可
 }

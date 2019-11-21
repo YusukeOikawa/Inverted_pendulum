@@ -4,7 +4,7 @@
 //=========================================================
 void rotary_encoder_check()
 {
-    static int code;
+    volatile static int code;
     //check the movement
     code = ( (code<<2) + (((PORTD & _BV(ENCA)) !=0 )<<1) + ((PORTD & _BV(ENCB)) !=0 ) ) & 0x3f ;
     //データ例外ではないかチェック

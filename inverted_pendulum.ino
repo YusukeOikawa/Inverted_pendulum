@@ -5,7 +5,6 @@
 //=========================================================
 #include <Wire.h>
 #include <LSM6.h>
-#include <MsTimer2.h>
 
 //#define DEBUG_FLG
 
@@ -18,29 +17,16 @@ LSM6 imu;//raw data
 #define ENCA PD2 //エンコーダA相(blue) pin 2
 #define ENCB PD3 //エンコーダB相(purple) pin3 
 #define IN_R PB4 //右モータドライバのDIRに接続 pin 12
-#define IN_PWM PB3 //モータドライバのPWMに接続　 (OC2A) pin 11
-#define IN_L PB2 //モータドライバのDIRに接続 pin 10
+#define IN_PWM 10 //モータドライバのPWMに接続　 (OC2A) pin 10
+#define IN_L PB3 //モータドライバのDIRに接続 pin 11
 #define led_r PB1 //Red LED pin 9
 #define led_g PB0 //Green LED pin 8
 #define led_y PD7 //Yellow LED pin7
-/*
-DigitalOut led1(LED1);  //LED on the NUCLEO board
-I2C i2c(PB_9, PB_8);    // Gyro + ACC (SDA, SCLK)
-BusIn encoder_bus(PC_11, PD_2); //Encoder (LSB to MSB)
-DigitalOut IN1(PC_8);   //TA7291P IN1
-DigitalOut IN2(PC_6);   //TA7291P IN2
-PwmOut motor(PC_9);     //TA7291P Vref
-DigitalOut led_r(PC_0); //Red LED
-DigitalOut led_g(PC_1); //Green LED
-DigitalOut led_y(PC_2); //Yellow LED
-*/
 
 //=========================================================
 //Ticker
-/*
-Ticker timer1; //for rotary encoder
-Ticker timer2; //for Kalman filter (angle)
-*/
+#include <FlexiTimer2.h>
+
 //=========================================================
 #define max_voltage 10.0 //モータの最大出力電圧
 
@@ -56,7 +42,8 @@ float theta_dot_variance; //角速度分散
 //=========================================================
 //Rotary encoder variables
 //int rotary_encoder_update_rate = 25; //usec //タイマー割り込みでなく外部割り込みを使う
-int rotary_encoder_resolution = 100;
+//int rotary_encoder_resolution = 100;
+int rotary_encoder_resolution = 159; //エンコーダ1回転あたりのパルス数
 int encoder_value = 0;
 int table[16] = {0, 1, -1, 0,  -1, 0, 0, 1,  1, 0, 0, -1,  0, -1, 1, 0};
 float pre_theta2 = 0;
@@ -91,17 +78,17 @@ float P_x_predict[4][4];
 float P_x[4][4];
 //"A" of the state equation (update freq = 100 Hz)
 float A_x[4][4] = {
-{1.00210e+00,1.00070e-02,0.00000e+00,3.86060e-05},
-{4.20288e-01,1.00210e+00,0.00000e+00,7.65676e-03},
-{-1.15751e-03,-3.87467e-06,1.00000e+00,9.74129e-03},
-{-2.29569e-01,-1.15751e-03,0.00000e+00,9.48707e-01}
+{1.00195896e+00,1.00065335e-02,0.00000000e+00,1.00021480e-04},
+{3.91381536e-01,1.00195896e+00,0.00000000e+00,1.97302912e-02},
+{-7.96877557e-04,-2.67469469e-06,1.00000000e+00,9.58496277e-03},
+{-1.57192498e-01,-7.96877557e-04,0.00000000e+00,9.18154381e-01},
 };
 //"B" of the state equation (update freq = 100 Hz)
 float B_x[4][1] = {
-{-2.70805e-04},
-{-5.37090e-02},
-{1.81472e-03},
-{3.59797e-01}
+{-2.6048e-04},
+{-5.138297e-02},
+{1.08087e-03},
+{2.1314796e-01}
 };
 //"C" of the state equation (update freq = 100 Hz)
 float C_x[4][4] = {
@@ -123,12 +110,13 @@ float feedback_rate = 0.01; //sec
 float motor_value = 0;
 int pwm_width = 0;
 int motor_direction = 1;
-float motor_offset = 0.17; //volt
+float motor_offset = 0.38; //volt オフセット電圧
 
 //=========================================================
 //Gain vector for the state feedback
 //(R=1000, Q = diag(1, 1, 10, 10), f=100Hz)
-float Gain[4] = {29.87522919, 4.59857246, 0.09293, 0.37006248};
+//float Gain[4] = {29.87522919, 4.59857246, 0.09293, 0.37006248};
+float Gain[4] = {34.07653093, 5.61162729, 0.09385255, 0.7993937};
 
 //=========================================================
 
@@ -145,7 +133,6 @@ void setup() {
   //Serial.println("LED initialization done");
 
   Wire.begin();
-
 
   //imu設定
   if (!imu.init())
@@ -175,13 +162,17 @@ void setup() {
   //モータ出力と Fast PWM 設定
   //-------------------------------------------
   DDRB |= _BV(IN_R);
-  DDRB |= _BV(IN_PWM);
+  // DDRB |= _BV(IN_PWM);
+  pinMode(IN_PWM, OUTPUT);
   DDRB |= _BV(IN_L);
+  /*
   TCCR2A  = bit(COM2A1);  // OC2A None-inverted Mode (1 0)
   TCCR2A |= bit(COM2B1); // OC2B None-Inverted Mode  (1 0)
-  TCCR2A |= bit(WGM21)  | bit(WGM20);  // Fast PWM (0xFF)
+  TCCR2A |= bit(WGM11)  | bit(WGM10);  // Fast PWM (0xFF)
   TCCR2B = bit(CS21) | bit(CS20); // clock/32
-  OCR2A = 0; //pin 11 (PWM)
+  OCR1B = 0; //pin 10 (PWM)
+  */
+  analogWrite(IN_PWM, 0);
   PORTB &= ~_BV(IN_R);
   PORTB &= ~_BV(IN_L);
 
@@ -306,6 +297,8 @@ void loop() {
     //timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
     //timer2: Kalman filter (theta & theta_dot), 400 Hz
     //timer2.attach(&update_theta, theta_update_interval);
+    FlexiTimer2::set(1, 1.0/400, update_theta);
+    FlexiTimer2::start();
 
     //-------------------------------------------
     //initialization done
@@ -322,6 +315,7 @@ void loop() {
     {
         //stop theta update process
         //timer2.detach();
+        FlexiTimer2::stop();
 
         //turn off LEDs
         PORTB &= ~_BV(led_g);
@@ -334,7 +328,7 @@ void loop() {
         y[0][0] = theta_data[0][0] * DEG_TO_RAD;
         theta1_dot_temp = get_gyro_data();
         y[1][0] = ( theta1_dot_temp - theta_data[1][0]) * DEG_TO_RAD;
-        y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution);
+        y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution); //[rad]
         y[3][0] = (y[2][0] - pre_theta2)/feedback_rate;
 
         //calculate Kalman gain: G = P'C^T(W+CP'C^T)^-1
@@ -410,8 +404,9 @@ void loop() {
         pre_theta2 = y[2][0];
         // start the angle update process
         //timer2.attach(&update_theta, theta_update_interval);
+        FlexiTimer2::start();
         // wait
-        delay(feedback_rate);
+        delay(feedback_rate * 1000);
     }
     //===========================================
     //Main loop (end)
