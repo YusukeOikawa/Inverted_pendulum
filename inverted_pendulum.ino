@@ -109,7 +109,7 @@ float voltage_variance = voltage_error * voltage_error;
 float feedback_rate = 0.01; //sec
 float motor_value = 0;
 int pwm_width = 0;
-int motor_direction = 1;
+int motor_direction = 2;
 float motor_offset = 0.38; //volt オフセット電圧
 
 //=========================================================
@@ -119,11 +119,16 @@ float motor_offset = 0.38; //volt オフセット電圧
 float Gain[4] = {34.07653093, 5.61162729, 0.09385255, 0.7993937};
 
 //=========================================================
+// Acc & Gyro
+float theta_deg; //degree
+float y_data; //degree/sec
+int time_temp;
 
 
 void setup() {
   //Serial.begin(9600);
-  //Serial.println("Initialising...");
+  //Serial.print("Initialising...");
+  //noInterrupts(); //割り込み禁止
 
   //-------------------------------------------
   //LED
@@ -297,13 +302,15 @@ void loop() {
     //timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
     //timer2: Kalman filter (theta & theta_dot), 400 Hz
     //timer2.attach(&update_theta, theta_update_interval);
-    FlexiTimer2::set(1, 1.0/400, update_theta);
-    FlexiTimer2::start();
+    //FlexiTimer2::set(1, 1.0/400, update_theta);
+    //FlexiTimer2::start();
 
     //-------------------------------------------
     //initialization done
     //-------------------------------------------
-    //Serial.println("Initialization done");
+    //Serial.println("done");
+    //PORTD &= ~_BV(led_y);
+    //interrupts(); //割り込み許可
     PORTD &= ~_BV(led_y);
     
 
@@ -312,10 +319,20 @@ void loop() {
     //it takes 700 usec (calculation)
     //===========================================
     while(1)
-    {
+    {          
+      //imu.read();
+      //get_acc_data();
+      //get_gyro_data();
+        //imu.readAcc();
+        //imu.readGyro();
+        //PORTB |= _BV(led_g);
+        //imu.read();
+        //FlexiTimer2::stop();
+        update_theta();
         //stop theta update process
         //timer2.detach();
-        FlexiTimer2::stop();
+        //noInterrupts(); //割り込み禁止
+        
 
         //turn off LEDs
         PORTB &= ~_BV(led_g);
@@ -325,12 +342,13 @@ void loop() {
         //Kalman Filter (all system)
         //---------------------------------------
         //measurement data
-        y[0][0] = theta_data[0][0] * DEG_TO_RAD;
-        theta1_dot_temp = get_gyro_data();
-        y[1][0] = ( theta1_dot_temp - theta_data[1][0]) * DEG_TO_RAD;
-        y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution); //[rad]
-        y[3][0] = (y[2][0] - pre_theta2)/feedback_rate;
-
+        //測定　データ
+        y[0][0] = (theta_data[0][0] - 90) * DEG_TO_RAD; //本体回転角度[rad]
+        theta1_dot_temp = y_data; //[degree/sec]
+        y[1][0] = (theta1_dot_temp - theta_data[1][0]) * DEG_TO_RAD; //本体の角速度[rad/sec]
+        y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution); //エンコーダー回転角度[rad]
+        y[3][0] = (y[2][0] - pre_theta2)/feedback_rate; //エンコーダ角速度[rad/sec]
+/*
         //calculate Kalman gain: G = P'C^T(W+CP'C^T)^-1
         mat_tran(C_x[0], tran_C_x[0], 4, 4);//C^T
         mat_mul(P_x_predict[0], tran_C_x[0], P_CT[0], 4, 4, 4, 4);//P'C^T
@@ -372,12 +390,20 @@ void loop() {
         mat_mul(B_x[0], tran_B_x[0], BBT[0], 4, 1, 1, 4);//BB^T
         mat_mul_const(BBT[0], voltage_variance, BUBT[0], 4, 4);//BUB^T
         mat_add(APAT[0], BUBT[0], P_x_predict[0], 4, 4);//APA^T+BUB^T
+*/
 
         //---------------------------------------
         //Motor control
         //---------------------------------------
         //reset
         motor_value = 0;
+
+        for(int i=0; i<4; i++)
+        {
+            x_data[i][0] = y[i][0];
+        }
+        //Serial.println(y[1][0]);
+        //Serial.println(pwm_width);
 
         //calculate Vin
         for(int i=0; i<4; i++)
@@ -399,14 +425,24 @@ void loop() {
         pwm_width = int( motor_value*100.0f/max_voltage );
 
         drive_motor(pwm_width);
+        //Serial.println(pwm_width);
+
+        if(pwm_width == 0)
+        {
+          PORTD |= _BV(led_y);
+        }
 
         // prepare for the next calculation of theta2_dot
         pre_theta2 = y[2][0];
         // start the angle update process
         //timer2.attach(&update_theta, theta_update_interval);
-        FlexiTimer2::start();
+        //interrupts(); //割り込み許可
+        //FlexiTimer2::start();
+        //Serial.println(micros()- time_temp);
         // wait
-        delay(feedback_rate * 1000);
+        //delay(feedback_rate * 1000);
+        //Serial.println(pwm_width);
+        delayMicroseconds(250);  //2.5ms 周期
     }
     //===========================================
     //Main loop (end)

@@ -12,7 +12,7 @@ void rotary_encoder_check()
       return;
     //update the encoder value
     int value = -1 * table[code];
-    encoder_value += value;
+    encoder_value -= value;
     return;
 }
 

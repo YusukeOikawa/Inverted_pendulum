@@ -80,7 +80,8 @@ void mat_mul_const(float *m1,float c, float *sol, int row, int column)
 void mat_inv(float *m, float *sol, int column, int row)
 {
     //allocate memory for a temporary matrix
-    float* temp = (float *)malloc( column*2*row*sizeof(float) );
+    //float* temp = (float *)malloc( column*2*row*sizeof(float) );
+    float temp[column*2*row];
 
     //make the augmented matrix
     for(int i=0; i<column; i++)
@@ -170,6 +171,6 @@ void mat_inv(float *m, float *sol, int column, int row)
             sol[i*row + j] = temp[i*(2*row) + (j+row)];
         }
     }
-    free(temp);
+    //free(temp);
     return;
 }

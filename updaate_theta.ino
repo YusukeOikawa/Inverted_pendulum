@@ -6,13 +6,16 @@ void update_theta()
 {
     //detach the rotary encoder polling
     //timer1.detach();
-    noInterrupts(); //割り込み禁止
-
+    
     //measurement data
     float y = get_acc_data(); //degree
+    //float y = theta_deg;
+    //float y = atan2(imu.a.z, imu.a.x) * RAD_TO_DEG;
 
     //input data
     float theta_dot_gyro = get_gyro_data(); //degree/sec
+    //float theta_dot_gyro = y_data; //degree/sec
+    //float theta_dot_gyro = float(imu.g.y) / 131;
 
     //calculate Kalman gain: G = P'C^T(W+CP'C^T)^-1
     float P_CT[2][1] = {};
@@ -66,5 +69,5 @@ void update_theta()
     //attach a timer for the rotary encoder (40 kHz)
     
     //timer1.attach_us(&rotary_encoder_check, rotary_encoder_update_rate);
-    interrupts(); //割り込み許可
+    return;
 }

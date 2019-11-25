@@ -6,7 +6,8 @@ float get_acc_data()
   //int z_data = imu.a.z;
   //float theta_deg = atan2(z_data, x_data); //radian
 
-  return atan2(imu.a.z, imu.a.x) * RAD_TO_DEG; //thea_deg[degree]
+  theta_deg = atan2(imu.a.z, imu.a.x) * RAD_TO_DEG;
+  return theta_deg; //thea_deg[degree]
 }
 
 void acc_init()

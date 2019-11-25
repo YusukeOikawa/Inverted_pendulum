@@ -9,7 +9,7 @@ void led_init()
   PORTB &= ~_BV(led_g);
   PORTD &= ~_BV(led_y);
   
-  delay(1000);   //wait 1 sec
+  delay(100);   //wait 0.1 sec
 }
 
 void led_test()
