@@ -17,7 +17,7 @@ void drive_motor(int pwm_width)
 
       //forward
       //OCR2A = pwm_width * 255; //pin 
-      pwm = (float)pwm_width * 1.5;
+      pwm = (float)pwm_width * 2.55;
       analogWrite(IN_PWM, (int)pwm);
       PORTB |= _BV(IN_R);
       PORTB &= ~_BV(IN_L);
@@ -43,7 +43,7 @@ void drive_motor(int pwm_width)
       
       //reverse
       //OCR2A = pwm_width * 255; //pin 10
-      pwm = (float)pwm_width * 1.5;
+      pwm = (float)pwm_width * 2.55;
       analogWrite(IN_PWM, (int)pwm);
       PORTB &= ~_BV(IN_R);
       PORTB |= _BV(IN_L);

@@ -106,7 +106,7 @@ float voltage_variance = voltage_error * voltage_error;
 
 //=========================================================
 //Motor control variables
-float feedback_rate = 0.01; //sec
+float feedback_rate = 0.0025; //sec
 float motor_value = 0;
 int pwm_width = 0;
 int motor_direction = 2;
@@ -116,7 +116,11 @@ float motor_offset = 0.38; //volt オフセット電圧
 //Gain vector for the state feedback
 //(R=1000, Q = diag(1, 1, 10, 10), f=100Hz)
 //float Gain[4] = {29.87522919, 4.59857246, 0.09293, 0.37006248};
-float Gain[4] = {34.07653093, 5.61162729, 0.09385255, 0.7993937};
+//float Gain[4] = {34.07653093, 5.61162729, 0.09385255, 0.7993937};
+float Gain[4] = {33.1442468, 5.45205260, 0.0139280243, 0.768819931};
+//float Gain[4] = {0, 0, 0.0139280243, 0.768819931};
+//float Gain[4] = {0.0, 1.61162729, 0.0, 0.0};
+
 
 //=========================================================
 // Acc & Gyro
@@ -153,12 +157,14 @@ void setup() {
   //Rotary encoder initialization
   //-------------------------------------------
   encoder_value = 0;
-  DDRD |= _BV(ENCA);
-  DDRD |= _BV(ENCB);
-  PORTD |= _BV(ENCA); //内部プルアップを有効にする
-  PORTD |= _BV(ENCB);
-  attachInterrupt(0, enc_changedPinA, CHANGE);
-  attachInterrupt(1, enc_changedPinB, CHANGE);
+  //DDRD |= _BV(ENCA);
+  //DDRD |= _BV(ENCB);
+  //PORTD |= _BV(ENCA); //内部プルアップを有効にする
+  //PORTD |= _BV(ENCB);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+  attachInterrupt(0, rotary_encoder_check, CHANGE);
+  attachInterrupt(1, rotary_encoder_check, CHANGE);
 
   //Serial.println("Rotary encoder initialization done");
 
@@ -319,7 +325,7 @@ void loop() {
     //it takes 700 usec (calculation)
     //===========================================
     while(1)
-    {          
+    {
       //imu.read();
       //get_acc_data();
       //get_gyro_data();
@@ -344,8 +350,8 @@ void loop() {
         //measurement data
         //測定　データ
         y[0][0] = (theta_data[0][0] - 90) * DEG_TO_RAD; //本体回転角度[rad]
-        theta1_dot_temp = y_data; //[degree/sec]
-        y[1][0] = (theta1_dot_temp - theta_data[1][0]) * DEG_TO_RAD; //本体の角速度[rad/sec]
+        theta1_dot_temp = float(imu.g.y) / 131.0; //[degree/sec] 
+        y[1][0] = (theta1_dot_temp - theta_data[1][0]/*角速度オフセット*/) * DEG_TO_RAD; //本体の角速度[rad/sec]
         y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution); //エンコーダー回転角度[rad]
         y[3][0] = (y[2][0] - pre_theta2)/feedback_rate; //エンコーダ角速度[rad/sec]
 /*
@@ -427,11 +433,6 @@ void loop() {
         drive_motor(pwm_width);
         //Serial.println(pwm_width);
 
-        if(pwm_width == 0)
-        {
-          PORTD |= _BV(led_y);
-        }
-
         // prepare for the next calculation of theta2_dot
         pre_theta2 = y[2][0];
         // start the angle update process
@@ -442,7 +443,7 @@ void loop() {
         // wait
         //delay(feedback_rate * 1000);
         //Serial.println(pwm_width);
-        delayMicroseconds(250);  //2.5ms 周期
+        delayMicroseconds(578);  //2.5ms 周期
     }
     //===========================================
     //Main loop (end)

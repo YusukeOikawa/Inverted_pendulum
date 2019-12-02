@@ -15,7 +15,7 @@ void update_theta()
     //input data
     float theta_dot_gyro = get_gyro_data(); //degree/sec
     //float theta_dot_gyro = y_data; //degree/sec
-    //float theta_dot_gyro = float(imu.g.y) / 131;
+    //float theta_dot_gyro = float(imu.g.y) / 131.0;
 
     //calculate Kalman gain: G = P'C^T(W+CP'C^T)^-1
     float P_CT[2][1] = {};

@@ -4,7 +4,7 @@ float get_gyro_data()
 
   //int y_data = imu.g.y;
 
-  y_data = float(imu.g.y) / 131;
+  y_data = float(imu.g.y) / 131.0;
   return y_data; //degree/sec
 }
 
