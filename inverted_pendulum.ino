@@ -43,10 +43,11 @@ float theta_dot_variance; //角速度分散
 //Rotary encoder variables
 //int rotary_encoder_update_rate = 25; //usec //タイマー割り込みでなく外部割り込みを使う
 //int rotary_encoder_resolution = 100;
-int rotary_encoder_resolution = 159; //エンコーダ1回転あたりのパルス数
+int rotary_encoder_resolution = 159; //ギヤヘッド1回転あたりのエンコーダのパルス数
 int encoder_value = 0;
 int table[16] = {0, 1, -1, 0,  -1, 0, 0, 1,  1, 0, 0, -1,  0, -1, 1, 0};
 float pre_theta2 = 0;
+int consider_backlash = 0;
 
 //=========================================================
 //Kalman filter (for angle estimation) variables
@@ -117,8 +118,9 @@ float motor_offset = 0.38; //volt オフセット電圧
 //(R=1000, Q = diag(1, 1, 10, 10), f=100Hz)
 //float Gain[4] = {29.87522919, 4.59857246, 0.09293, 0.37006248};
 //float Gain[4] = {34.07653093, 5.61162729, 0.09385255, 0.7993937};
-float Gain[4] = {33.1442468, 5.45205260, 0.0139280243, 0.768819931};
-//float Gain[4] = {0, 0, 0.0139280243, 0.768819931};
+//float Gain[4] = {33.1442468, 5.45205260, 0.0139280243, 0.768819931};
+float Gain[4] = {0, 0, 0.0139280243, 0.768819931};
+//float Gain[4] = {0, 0, 0.0139280243, 0};
 //float Gain[4] = {0.0, 1.61162729, 0.0, 0.0};
 
 
@@ -126,7 +128,8 @@ float Gain[4] = {33.1442468, 5.45205260, 0.0139280243, 0.768819931};
 // Acc & Gyro
 float theta_deg; //degree
 float y_data; //degree/sec
-int time_temp;
+unsigned long time_temp;
+unsigned long time_enc;
 
 
 void setup() {
@@ -318,6 +321,8 @@ void loop() {
     //PORTD &= ~_BV(led_y);
     //interrupts(); //割り込み許可
     PORTD &= ~_BV(led_y);
+
+    time_temp = micros();
     
 
     //===========================================
@@ -326,6 +331,7 @@ void loop() {
     //===========================================
     while(1)
     {
+      time_enc = micros();
       //imu.read();
       //get_acc_data();
       //get_gyro_data();
@@ -352,8 +358,12 @@ void loop() {
         y[0][0] = (theta_data[0][0] - 90) * DEG_TO_RAD; //本体回転角度[rad]
         theta1_dot_temp = float(imu.g.y) / 131.0; //[degree/sec] 
         y[1][0] = (theta1_dot_temp - theta_data[1][0]/*角速度オフセット*/) * DEG_TO_RAD; //本体の角速度[rad/sec]
-        y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution); //エンコーダー回転角度[rad]
-        y[3][0] = (y[2][0] - pre_theta2)/feedback_rate; //エンコーダ角速度[rad/sec]
+        y[2][0] = encoder_value * (2*3.14f)/(4*rotary_encoder_resolution); //タイヤ回転角度[rad]
+        y[3][0] = (y[2][0] - pre_theta2)/(micros() - time_enc)*1000000; //タイヤ角速度[rad/sec]
+        time_enc = micros();
+
+        if (y[3][0] > 26)
+          PORTD |= _BV(led_y); //turns on the yellow LED
 /*
         //calculate Kalman gain: G = P'C^T(W+CP'C^T)^-1
         mat_tran(C_x[0], tran_C_x[0], 4, 4);//C^T
@@ -443,7 +453,7 @@ void loop() {
         // wait
         //delay(feedback_rate * 1000);
         //Serial.println(pwm_width);
-        delayMicroseconds(578);  //2.5ms 周期
+        delayMicroseconds(2500-(micros()-time_temp));  //2.5ms 周期
     }
     //===========================================
     //Main loop (end)
