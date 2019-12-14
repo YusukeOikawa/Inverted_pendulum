@@ -13,7 +13,7 @@ void drive_motor(int pwm_width)
       if(motor_direction == 2)
       {
         protect_MAX14870();
-        encoder_value+=2;
+        //encoder_value+=2;
       }
 
       //forward
@@ -40,7 +40,7 @@ void drive_motor(int pwm_width)
       if(motor_direction == 1)
       {
         protect_MAX14870();
-        encoder_value-=2;
+        //encoder_value-=2;
       }
       
       //reverse
